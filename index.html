@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>狂犬疫苗接种计算器</title>
+    <style>
+        /* === 1. 全局样式 === */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: #f7f8fa;
+            margin: 0;
+            padding: 20px 15px 40px 15px; /* 底部留一点空间即可 */
+            color: #333;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        h2.header {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        /* === 2. 卡片与输入框 === */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 0 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+
+        .input-row {
+            height: 55px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+
+        .input-row label {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        /* 输入框样式 */
+        input[type="date"], select {
+            border: none;
+            background: transparent;
+            font-size: 15px;
+            color: #1989fa;
+            font-weight: 500;
+            text-align: right;
+            outline: none;
+            direction: rtl;
+            padding-right: 0;
+            cursor: pointer;
+            width: 60%; 
+        }
+        
+        select {
+           appearance: none;
+           -webkit-appearance: none;
+           padding-right: 15px;
+        }
+
+        /* 自定义下拉箭头 */
+        .input-row::after {
+            content: '▾';
+            position: absolute;
+            right: -5px;
+            color: #1989fa;
+            pointer-events: none;
+            font-size: 12px;
+        }
+        .input-row.date-row::after { display: none; }
+
+        .divider {
+            height: 1px;
+            background: #eee;
+            width: 100%;
+        }
+
+        /* === 3. 时间轴样式 === */
+        .timeline { padding-left: 5px; }
+        .timeline-item { display: flex; }
+        
+        .time-col {
+            width: 70px;
+            text-align: right;
+            padding-right: 15px;
+            padding-top: 3px;
+        }
+        .date-text { font-size: 16px; font-weight: bold; color: #333; display: block; }
+        .week-text { font-size: 12px; color: #999; margin-top: 2px; display: block; }
+
+        .line-col {
+            width: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            background: #1989fa;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px #1989fa;
+            margin-top: 6px;
+            z-index: 2;
+        }
+        .line {
+            width: 2px;
+            background: #e0e0e0;
+            flex: 1;
+            min-height: 50px;
+            margin-top: -5px;
+            margin-bottom: -5px;
+        }
+
+        .content-col {
+            flex: 1;
+            padding-bottom: 25px;
+            padding-left: 10px;
+        }
+        .note-box {
+            background: #fff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            display: inline-block;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            min-width: 120px;
+        }
+        .note-text { font-size: 14px; color: #333; display: block; }
+        .offset-text { font-size: 12px; color: #999; margin-top: 3px; display: block; }
+        
+        .special-note { background-color: #fff8f0; border: 1px dashed #ff976a; }
+        .special-note .note-text { color: #d00000; font-weight: bold; }
+
+        /* 底部版权 */
+        .footer-info {
+            text-align: center;
+            color: #ccc;
+            font-size: 12px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+
+<h2 class="header">💉 狂犬疫苗接种计划</h2>
+
+<div class="card">
+    <div class="input-row date-row">
+        <label>首针日期</label>
+        <input type="date" id="startDate">
+    </div>
+    <div class="divider"></div>
+    <div class="input-row">
+        <label>接种方案</label>
+        <select id="programType">
+            <option value="5_dose">5针程序 (经典)</option>
+            <option value="2_1_1">2-1-1程序 (4针)</option>
+            <option value="re_exposure">再次暴露 (2针)</option>
+            <option value="pre_exposure">暴露前预防 (3针)</option>
+        </select>
+    </div>
+</div>
+
+<div id="resultArea" class="timeline"></div>
+
+<div class="footer-info">
+    Generated by 狂犬疫苗接种计算器
+</div>
+
+<script>
+    // === 核心逻辑 ===
+    const programs = {
+        "5_dose": { offsets: [0, 3, 7, 14, 28], notes: ["第1针", "第2针", "第3针", "第4针", "第5针"] },
+        "2_1_1": { offsets: [0, 7, 21], notes: ["第1、2针 (左右臂各一针)", "第3针", "第4针"] },
+        "re_exposure": { offsets: [0, 3], notes: ["第1针 (再次暴露)", "第2针"] },
+        "pre_exposure": { offsets: [0, 7, 21], notes: ["第1针 (基础免疫)", "第2针", "第3针"] }
+    };
+
+    const dateInput = document.getElementById('startDate');
+    const typeSelect = document.getElementById('programType');
+    const resultArea = document.getElementById('resultArea');
+
+    // 初始化：默认今天
+    const today = new Date();
+    dateInput.value = today.toISOString().split('T')[0];
+    calculateAndRender();
+
+    // 监听用户操作
+    dateInput.addEventListener('change', calculateAndRender);
+    typeSelect.addEventListener('change', calculateAndRender);
+
+    function calculateAndRender() {
+        const dateStr = dateInput.value;
+        const type = typeSelect.value;
+        if (!dateStr) return;
+
+        resultArea.innerHTML = '';
+        const schedule = programs[type];
+        
+        // 兼容性好的日期解析方式
+        const parts = dateStr.split('-');
+        const startObj = new Date(parts[0], parts[1] - 1, parts[2]);
+        
+        const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+        schedule.offsets.forEach((offset, index) => {
+            const currentObj = new Date(startObj);
+            currentObj.setDate(startObj.getDate() + offset);
+
+            const month = currentObj.getMonth() + 1;
+            const day = currentObj.getDate();
+            const week = weekDays[currentObj.getDay()];
+            
+            // 2-1-1 首针特殊样式
+            const isSpecial = (type === '2_1_1' && index === 0);
+            const noteClass = isSpecial ? 'note-box special-note' : 'note-box';
+            
+            // 最后一项不画连接线
+            const lineHtml = (index < schedule.offsets.length - 1) ? '<div class="line"></div>' : '';
+
+            const html = `
+                <div class="timeline-item">
+                    <div class="time-col">
+                        <span class="date-text">${month}月${day}日</span>
+                        <span class="week-text">${week}</span>
+                    </div>
+                    <div class="line-col">
+                        <div class="dot"></div>
+                        ${lineHtml}
+                    </div>
+                    <div class="content-col">
+                        <div class="${noteClass}">
+                            <span class="note-text">${schedule.notes[index]}</span>
+                            <span class="offset-text">(第${offset}天)</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            resultArea.insertAdjacentHTML('beforeend', html);
+        });
+    }
+</script>
+</body>
+</html>
